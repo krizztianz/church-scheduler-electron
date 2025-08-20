@@ -1,0 +1,3 @@
+[submodule "pythonScripts"]
+	path = pythonScripts
+	url = git@github.com:krizztianz/church-scheduler.git
