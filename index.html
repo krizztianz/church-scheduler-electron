@@ -146,6 +146,18 @@
   <!-- Scripts -->
   <script src="./assets/bootstrap.bundle.min.js"></script>
   <script>
+    async function onGenerateClicked() {
+      try {
+        const res = await window.api.generate(['--some-arg', 'value']);
+        console.log('OK:', res.stdout);
+        alert('Done!');
+      } catch (e) {
+        console.error(e);
+        alert('Failed: ' + e.message);
+      }
+    }
+  </script>
+  <script>
     (function(){
       const now = new Date();
       const THIS_YEAR = now.getFullYear();
@@ -213,11 +225,12 @@
       // Change handlers
       elSelectTahun.addEventListener('change', setMonthDisabledByYear);
 
-      // Submit demo handler
-      elSubmit.addEventListener('click', () => {
+      // Submit handler (IPC call)
+      elSubmit.addEventListener('click', async () => {
         const tahun = parseInt(elSelectTahun.value, 10);
         const bulanVal = parseInt(elSelectBulan.value, 10);
         const bulanText = elSelectBulan.options[elSelectBulan.selectedIndex].textContent;
+        const pjemaat = 3;
 
         // Validasi kecil: jika disabled, cegah
         if (elSelectBulan.options[elSelectBulan.selectedIndex].disabled){
@@ -225,9 +238,23 @@
           return;
         }
 
+        // Normalisasi format argumen untuk runner: [MM, YYYY, PJEMAAT]
+        const MM = String(bulanVal).padStart(2, '0');
+        const YYYY = String(tahun);
+        const args = [MM, YYYY, String(pjemaat)];
+
         modal.hide();
-        showToast(`Menjalankan generate jadwal untuk ${bulanText} ${tahun}.`);
-        // TODO: panggil API generate di sini.
+        showToast(`Memproses jadwal ${bulanText} ${tahun} (Jemaat: ${pjemaat})...`);
+
+        try {
+          const res = await window.api.generate(args);
+          // Tampilkan ringkas output (opsional)
+          console.log('Runner OK:', res);
+          showToast('Selesai. File Excel tersimpan di folder output.');
+        } catch (e) {
+          console.error(e);
+          showToast('Gagal: ' + (e?.message || e));
+        }
       });
 
       // Toast helper

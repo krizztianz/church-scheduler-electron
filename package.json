@@ -30,7 +30,19 @@
       "preload.cjs",
       "index.html",
       "assets/**/*",
-      "build/**/*"
+      "build/**/*",
+      "pythonScripts/**",
+      "!**/__pycache__",
+      "!pythonScripts/.venv",
+      "!pythonScripts/build",
+      "!pythonScripts/dist",
+      "!pythonScripts/*.spec"
+    ],
+    "extraResources": [
+      { "from": "pythonScripts", "to": "pythonScripts" }
+    ],
+    "asarUnpack": [
+      "pythonScripts/**"
     ],
     "directories": { "buildResources": "build" },
     "win": {
