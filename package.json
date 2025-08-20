@@ -1,0 +1,63 @@
+{
+  "name": "church-scheduler",
+  "version": "1.0.0",
+  "description": "Generator jadwal gereja bulanan (Electron)",
+  "homepage": "https://github.com/krizztianz/church-scheduler-electron",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/krizztianz/church-scheduler-electron.git"
+  },
+  "bugs": { "url": "https://github.com/krizztianz/church-scheduler-electron/issues" },
+  "license": "MIT",
+  "author": {
+    "name": "Kristian Andi",
+    "email": "kristianandi33@gmail.com",
+    "url": "https://github.com/krizztianz"
+  },
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.kris.churchscheduler",
+    "productName": "ChurchScheduler",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "files": [
+      "main.mjs",
+      "preload.cjs",
+      "index.html",
+      "assets/**/*",
+      "build/**/*"
+    ],
+    "directories": { "buildResources": "build" },
+    "win": {
+      "target": ["nsis", "portable"],
+      "icon": "build/icon.ico"
+    },
+    "linux": {
+      "target": ["AppImage", "tar.gz"],
+      "icon": "build/icon.png",
+      "category": "Utility",
+      "executableName": "church-scheduler",
+      "desktop": {
+        "entry": {
+          "Name": "Church Scheduler",
+          "Comment": "Generator jadwal petugas bulanan",
+          "Categories": "Utility;",
+          "Terminal": "false",
+          "StartupWMClass": "church-scheduler"
+        }
+      },
+      "maintainer": "Kristian Andi <kristianandi33@gmail.com>",
+      "synopsis": "Generator jadwal petugas bulanan",
+      "description": "Aplikasi desktop Electron untuk membuat jadwal petugas per bulan dengan UI responsif."
+    }
+  },
+  "devDependencies": {
+    "electron": "^37.3.1",
+    "electron-builder": "^26.0.12"
+  }
+}

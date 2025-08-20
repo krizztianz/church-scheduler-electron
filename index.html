@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               img-src 'self' data:;
+               font-src 'self' data:;
+               style-src 'self' 'unsafe-inline';
+               script-src 'self' 'unsafe-inline';">
+  <title>Jadwal Petugas</title>
+  <!-- Bootstrap 5 -->
+  <link href="./assets/bootstrap.min.css" rel="stylesheet">
+  <!-- Font Awesome -->
+  <link href="./assets/fa/css/all.min.css" rel="stylesheet">
+  <!-- Google Font (opsional, untuk nuansa mockup) -->
+  <link rel="stylesheet" href="./assets/fonts/nunito.css">
+  <style>
+    h1 { font-weight: 800; }
+    strong, .semibold { font-weight: 600; }
+    :root{
+      --ink:#222; 
+      --ink-soft:#5f6368;
+      --line:#e8eaed;
+      --card:#ffffff;
+      --accent:#0d6efd;
+    }
+    body{ font-family: "Nunito", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#fafafa; color:var(--ink); }
+    .app-frame{ border:2px solid #1e1e1e20; border-radius:22px; padding:2rem; background: #fff; box-shadow: 0 12px 30px rgba(0,0,0,.05); }
+    .app-title{ font-weight:800; letter-spacing:.5px; }
+
+    .action-card{ cursor:pointer; user-select:none; border:2px solid var(--line); border-radius:22px; background:var(--card); transition: all .15s ease; padding:1.25rem; }
+    .action-card:hover{ transform: translateY(-2px); border-color:#d5d7da; box-shadow: 0 8px 22px rgba(0,0,0,.06); }
+    .action-icon{ width:80px; height:80px; border-radius:18px; display:flex; align-items:center; justify-content:center; background:#f4f6f8; margin:0 auto .75rem; }
+    .action-icon i{ font-size:40px; }
+    .action-label{ text-align:center; font-size:1rem; margin-top:.25rem; color:var(--ink-soft); }
+
+    .pill{ border-radius:14px; padding:.35rem .65rem; font-size:.875rem; background:#f7f7f9; border:1px solid var(--line); }
+
+    /* Modal cosmetics */
+    .modal-content{ border-radius:18px; }
+    .modal-header{ border-bottom:0; }
+    .modal-footer{ border-top:0; }
+
+    /* Month grid look (optional if we switch to selects later) -> we keep selects per requirement */
+
+    /* Responsive spacing tweaks */
+    @media (max-width:575.98px){
+      .app-frame{ padding:1.25rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="container py-4 py-md-5">
+    <div class="app-frame">
+      <h1 class="app-title text-center mb-4 mb-md-5">Jadwal Petugas</h1>
+
+      <div class="row g-4 justify-content-center">
+        <!-- Generate Jadwal -->
+        <div class="col-10 col-sm-6 col-md-4 col-lg-3">
+          <div class="action-card text-center h-100" id="btnGenerateOpen" role="button" aria-controls="modalGenerate">
+            <div class="action-icon">
+              <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+            </div>
+            <div class="fw-bold">Generate Jadwal</div>
+            <div class="action-label">Buat jadwal petugas per bulan</div>
+          </div>
+        </div>
+
+        <!-- Pengaturan -->
+        <div class="col-10 col-sm-6 col-md-4 col-lg-3">
+          <div class="action-card text-center h-100" role="button">
+            <div class="action-icon">
+              <i class="fa-solid fa-gear" aria-hidden="true"></i>
+            </div>
+            <div class="fw-bold">Pengaturan</div>
+            <div class="action-label">Preferensi & parameter</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Optional helper caption -->
+      <div class="text-center mt-4">
+        <span class="pill">Pilih aksi – cepat & responsif</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal: Generate Jadwal -->
+  <div class="modal fade" id="modalGenerate" tabindex="-1" aria-labelledby="modalGenerateLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalGenerateLabel"><i class="fa-solid fa-calendar-week me-2"></i>Generate Jadwal</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+        </div>
+        <div class="modal-body">
+          <form id="formGenerate" class="row g-3 align-items-end">
+            <div class="col-12 col-sm-7">
+              <label for="selectBulan" class="form-label">Bulan</label>
+              <select class="form-select" id="selectBulan" required>
+                <!-- 1..12 (diisi statis agar mudah disable/enable) -->
+                <option value="1">Januari</option>
+                <option value="2">Februari</option>
+                <option value="3">Maret</option>
+                <option value="4">April</option>
+                <option value="5">Mei</option>
+                <option value="6">Juni</option>
+                <option value="7">Juli</option>
+                <option value="8">Agustus</option>
+                <option value="9">September</option>
+                <option value="10">Oktober</option>
+                <option value="11">November</option>
+                <option value="12">Desember</option>
+              </select>
+            </div>
+            <div class="col-12 col-sm-5">
+              <label for="selectTahun" class="form-label">Tahun</label>
+              <select class="form-select" id="selectTahun" required></select>
+            </div>
+          </form>
+          <div class="small text-muted mt-2" id="hintBulan"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="fa-solid fa-xmark me-1"></i>Batal</button>
+          <button type="button" class="btn btn-primary" id="btnGenerateSubmit"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Generate</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notifikasi -->
+  <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1080">
+    <div id="toastInfo" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="toast-header">
+        <i class="fa-solid fa-circle-info me-2"></i>
+        <strong class="me-auto">Info</strong>
+        <small>baru saja</small>
+        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+      <div class="toast-body" id="toastBody">—</div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="./assets/bootstrap.bundle.min.js"></script>
+  <script>
+    (function(){
+      const now = new Date();
+      const THIS_YEAR = now.getFullYear();
+      const THIS_MONTH = now.getMonth() + 1; // 1..12
+
+      const elOpen = document.getElementById('btnGenerateOpen');
+      const elModal = document.getElementById('modalGenerate');
+      const modal = new bootstrap.Modal(elModal);
+      const elSelectBulan = document.getElementById('selectBulan');
+      const elSelectTahun = document.getElementById('selectTahun');
+      const elHint = document.getElementById('hintBulan');
+      const elSubmit = document.getElementById('btnGenerateSubmit');
+
+      // Populate Tahun (tahun ini & 1 tahun setelahnya)
+      function fillYears(){
+        elSelectTahun.innerHTML = '';
+        [THIS_YEAR, THIS_YEAR + 1].forEach(y => {
+          const opt = document.createElement('option');
+          opt.value = String(y);
+          opt.textContent = y;
+          elSelectTahun.appendChild(opt);
+        });
+      }
+
+      function setMonthDisabledByYear(){
+        const selectedYear = parseInt(elSelectTahun.value, 10);
+        const opts = Array.from(elSelectBulan.options);
+
+        opts.forEach(o => {
+          const m = parseInt(o.value, 10);
+          // disable jika tahun terpilih = tahun ini dan bulan < bulan sekarang
+          const shouldDisable = (selectedYear === THIS_YEAR && m < THIS_MONTH);
+          o.disabled = shouldDisable;
+          o.title = shouldDisable ? 'Tidak tersedia: bulan sudah berlalu di tahun ini' : '';
+        });
+
+        // Pastikan ada bulan yang valid terpilih
+        if (elSelectBulan.options[elSelectBulan.selectedIndex]?.disabled){
+          const firstEnabled = opts.find(o => !o.disabled);
+          if(firstEnabled) firstEnabled.selected = true;
+        }
+
+        // Hint
+        if (selectedYear === THIS_YEAR){
+          elHint.textContent = 'Bulan sebelum bulan ini tidak dapat dipilih untuk tahun berjalan.';
+        } else {
+          elHint.textContent = '';
+        }
+      }
+
+      function setDefaultSelections(){
+        // default tahun = tahun ini, bulan = bulan ini
+        elSelectTahun.value = String(THIS_YEAR);
+        elSelectBulan.value = String(THIS_MONTH);
+      }
+
+      // Open modal action
+      elOpen.addEventListener('click', () => {
+        fillYears();
+        setDefaultSelections();
+        setMonthDisabledByYear();
+        modal.show();
+      });
+
+      // Change handlers
+      elSelectTahun.addEventListener('change', setMonthDisabledByYear);
+
+      // Submit demo handler
+      elSubmit.addEventListener('click', () => {
+        const tahun = parseInt(elSelectTahun.value, 10);
+        const bulanVal = parseInt(elSelectBulan.value, 10);
+        const bulanText = elSelectBulan.options[elSelectBulan.selectedIndex].textContent;
+
+        // Validasi kecil: jika disabled, cegah
+        if (elSelectBulan.options[elSelectBulan.selectedIndex].disabled){
+          showToast('Silakan pilih bulan yang tersedia.');
+          return;
+        }
+
+        modal.hide();
+        showToast(`Menjalankan generate jadwal untuk ${bulanText} ${tahun}.`);
+        // TODO: panggil API generate di sini.
+      });
+
+      // Toast helper
+      function showToast(message){
+        const toastEl = document.getElementById('toastInfo');
+        document.getElementById('toastBody').textContent = message;
+        const t = new bootstrap.Toast(toastEl, { delay: 2600 });
+        t.show();
+      }
+    })();
+  </script>
+</body>
+</html>
