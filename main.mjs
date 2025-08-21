@@ -1,5 +1,5 @@
 
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
@@ -25,6 +25,45 @@ function resolveOutputDir() {
   return resolveProjectPath('output');
 }
 
+// Ensure Master.xlsx exists under Documents/JadwalPetugas/config.
+// 1) If found there, return it.
+// 2) Else try to copy from resources candidates.
+// 3) Else prompt user to select a .xlsx and copy it there.
+async function ensureMasterInDocuments() {
+  const cfgDir = path.join(app.getPath('documents'), 'JadwalPetugas', 'config');
+  const target = path.join(cfgDir, 'Master.xlsx');
+  if (fs.existsSync(target)) return target;
+
+  const candidates = [
+    resolveProjectPath('Master.xlsx'),
+    resolveProjectPath('pythonScripts', 'Master.xlsx')
+  ];
+
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      ensureDir(cfgDir);
+      fs.copyFileSync(c, target);
+      return target;
+    }
+  }
+
+  // Ask user to pick Master.xlsx once
+  const res = await dialog.showOpenDialog({
+    title: 'Pilih file Master.xlsx',
+    message: 'File Master.xlsx tidak ditemukan. Pilih file Master.xlsx sumber data Anda. File akan disalin ke Documents/JadwalPetugas/config.',
+    properties: ['openFile'],
+    filters: [{ name: 'Excel', extensions: ['xlsx'] }]
+  });
+  if (res.canceled || !res.filePaths?.length) {
+    throw new Error('Master.xlsx belum tersedia. Silakan pilih file Master.xlsx.');
+  }
+  const picked = res.filePaths[0];
+  if (!fs.existsSync(picked)) throw new Error('File yang dipilih tidak ditemukan.');
+  ensureDir(cfgDir);
+  fs.copyFileSync(picked, target);
+  return target;
+}
+
 // Format "Jadwal_Bulan_{Bulan}-{YYYY}_{HHmmss}.xlsx"
 function buildOutputName(year, month) {
   const d = new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1);
@@ -40,6 +79,9 @@ ipcMain.handle('python:generate', async (_evt, payload) => {
   try {
     const [MM, YYYY, pjemaatRaw] = payload?.args || [];
     if (!MM || !YYYY) throw new Error("Args missing. Expect [MM, YYYY, pjemaat].");
+
+    // Pre-initialize Master.xlsx in Documents (one-time, interactive if needed)
+    await ensureMasterInDocuments();
 
     const month = String(parseInt(MM, 10));
     const year  = String(parseInt(YYYY, 10));
