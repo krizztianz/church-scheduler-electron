@@ -93,8 +93,8 @@ ipcMain.handle('python:generate', async (_evt, payload) => {
 // --- Window ---------------------------------------------------
 function createWindow() {
   const win = new BrowserWindow({
-    width: 980,
-    height: 720,
+    width: 1024,
+    height: 560,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

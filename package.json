@@ -28,42 +28,20 @@
     "productName": "ChurchScheduler",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "files": [
-      "main.mjs",
-      "preload.cjs",
-      "index.html",
-      "assets/**/*",
-      "build/**/*",
-      "pythonScripts/**",
-      "!**/__pycache__",
-      "!pythonScripts/.venv",
-      "!pythonScripts/build",
-      "!pythonScripts/dist",
-      "!pythonScripts/*.spec"
+      "**/*",
+      "!pythonScripts/venv{,/**}",
+      "!.venv{,/**}",
+      "!**/.venv{,/**}",
+      "!**/__pycache__/**",
+      "!**/*.pyc"
     ],
     "extraResources": [
-      {
-        "from": "pythonScripts",
-        "to": "pythonScripts"
-      },
-      {
-        "from": "church_scheduler.py",
-        "to": "church_scheduler.py"
-      },
-      {
-        "from": "Master.xlsx",
-        "to": "Master.xlsx"
-      },
-      {
-        "from": "requirements.txt",
-        "to": "requirements.txt" },
-      {
-        "from": "index.html",
-        "to": "index.html"
-      },
-      {
-        "from": "assets",
-        "to": "assets"
-      }
+      { "from": "pythonScripts",      "to": "pythonScripts", "filter": ["**/*", "!venv/**", "!**/__pycache__/**", "!**/*.pyc"] },
+      { "from": "church_scheduler.py","to": "church_scheduler.py" },
+      { "from": "Master.xlsx",        "to": "Master.xlsx" },
+      { "from": "requirements.txt",   "to": "requirements.txt" },
+      { "from": "index.html",         "to": "index.html" },
+      { "from": "assets",             "to": "assets" }
     ],
     "asarUnpack": [
       "pythonScripts/**"
