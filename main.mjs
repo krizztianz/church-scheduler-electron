@@ -1,55 +1,101 @@
+
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { spawn } from 'child_process';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Resolusi path: dev -> root project, packaged -> resourcesPath
 function resolveProjectPath(...segments) {
   const base = app.isPackaged ? process.resourcesPath : __dirname;
   return path.join(base, ...segments);
 }
 
-// Direktori python (submodule) & runner
-const PY_DIR  = resolveProjectPath('pythonScripts');
-const RUN_SH  = path.join(PY_DIR, 'run.sh');
-const RUN_BAT = path.join(PY_DIR, 'run.bat');
+function ensureDir(p) {
+  try { fs.mkdirSync(p, { recursive: true }); } catch {}
+}
 
-ipcMain.handle('python:generate', async (_evt, args) => {
-  return new Promise((resolve, reject) => {
-    const isWin = process.platform === 'win32';
-    const cmd = isWin ? RUN_BAT : RUN_SH;
-    const cmdArgs = Array.isArray(args) ? args : [];
+// Format "Jadwal_Bulan_{Bulan}-{YYYY}_{HHmmss}.xlsx" in Indonesian locale
+function buildOutputName(year, month) {
+  const d = new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1);
+  const bulanNama = new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(d);
+  const hhmmss = new Intl.DateTimeFormat('id-ID', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+  }).format(new Date()).replace(/:/g, '');
+  return `Jadwal_Bulan_${bulanNama}-${year}_${hhmmss}.xlsx`;
+}
 
-    const child = spawn(cmd, cmdArgs, {
-      cwd: PY_DIR,              // PENTING: jalankan di pythonScripts/
-      shell: false
+// --- IPC: python:generate ---------------------------------------------------
+ipcMain.handle('python:generate', async (_evt, payload) => {
+  try {
+    const [MM, YYYY, pjemaatRaw] = payload?.args || [];
+    if (!MM || !YYYY) throw new Error("Args missing. Expect [MM, YYYY, pjemaat].");
+
+    const month = String(parseInt(MM, 10));
+    const year  = String(parseInt(YYYY, 10));
+    const pjemaat = String(parseInt(pjemaatRaw ?? "3", 10) || 3);
+
+    const scriptDir = resolveProjectPath('pythonScripts');
+    const runSh = path.join(scriptDir, 'run.sh');
+    const runBat = path.join(scriptDir, 'run.bat');
+
+    const outputDir = resolveProjectPath('output');
+    ensureDir(outputDir);
+    const fileName = buildOutputName(year, month);
+    const outputPath = path.join(outputDir, fileName);
+
+    // Validate wrappers exist
+    if (process.platform === 'win32') {
+      if (!fs.existsSync(runBat)) throw new Error(`Wrapper missing: ${runBat}`);
+    } else {
+      if (!fs.existsSync(runSh)) throw new Error(`Wrapper missing: ${runSh}`);
+    }
+
+    let child;
+    const env = { ...process.env, OUTPUT_PATH: outputPath };
+    if (process.platform === 'win32') {
+      child = spawn('cmd.exe', ['/c', runBat, month, year, pjemaat], {
+        cwd: scriptDir, env
+      });
+    } else {
+      // ensure exec bit; best-effort
+      try {
+        const st = fs.statSync(runSh);
+        const mode = st.mode | 0o111;
+        if ((st.mode & 0o111) === 0) fs.chmodSync(runSh, mode);
+      } catch {}
+      child = spawn(runSh, [month, year, pjemaat], {
+        cwd: scriptDir, env
+      });
+    }
+
+    let stdout = '', stderr = '';
+    child.stdout.on('data', (d) => stdout += d.toString());
+    child.stderr.on('data', (d) => stderr += d.toString());
+
+    return await new Promise((resolve, reject) => {
+      child.on('error', (err) => reject(new Error(`Spawn failed: ${err.message}`)));
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve({ code, stdout, stderr, outputPath });
+        } else {
+          reject(new Error(stderr || `Wrapper exited with code ${code}`));
+        }
+      });
     });
-
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', d => (stdout += d.toString()));
-    child.stderr.on('data', d => (stderr += d.toString()));
-
-    child.on('close', code => {
-      if (code === 0) resolve({ ok: true, stdout });
-      else reject(new Error(`pythonScripts exited with code ${code}\n${stderr}`));
-    });
-
-    child.on('error', reject);
-  });
+  } catch (err) {
+    throw new Error(err?.message || String(err));
+  }
 });
 
-function createWindow () {
+// --- Window ---------------------------------------------------
+function createWindow() {
   const win = new BrowserWindow({
-    width: 1024,
-    height: 600,
-    minWidth: 880,
-    minHeight: 530,
-    show: true,                 // tampilkan setelah siap
-    autoHideMenuBar: true,       // sembunyikan menu
+    width: 980,
+    height: 720,
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -57,8 +103,7 @@ function createWindow () {
     },
     icon: resolveProjectPath('build', 'icon.png')
   });
-
-  win.loadFile('index.html');
+  win.loadFile(resolveProjectPath('index.html'));
 }
 
 app.whenReady().then(createWindow);

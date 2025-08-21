@@ -7,7 +7,9 @@
     "type": "git",
     "url": "git+https://github.com/krizztianz/church-scheduler-electron.git"
   },
-  "bugs": { "url": "https://github.com/krizztianz/church-scheduler-electron/issues" },
+  "bugs": {
+    "url": "https://github.com/krizztianz/church-scheduler-electron/issues"
+  },
   "license": "MIT",
   "author": {
     "name": "Kristian Andi",
@@ -39,18 +41,48 @@
       "!pythonScripts/*.spec"
     ],
     "extraResources": [
-      { "from": "pythonScripts", "to": "pythonScripts" }
+      {
+        "from": "pythonScripts",
+        "to": "pythonScripts"
+      },
+      {
+        "from": "church_scheduler.py",
+        "to": "church_scheduler.py"
+      },
+      {
+        "from": "Master.xlsx",
+        "to": "Master.xlsx"
+      },
+      {
+        "from": "requirements.txt",
+        "to": "requirements.txt" },
+      {
+        "from": "index.html",
+        "to": "index.html"
+      },
+      {
+        "from": "assets",
+        "to": "assets"
+      }
     ],
     "asarUnpack": [
       "pythonScripts/**"
     ],
-    "directories": { "buildResources": "build" },
+    "directories": {
+      "buildResources": "build"
+    },
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "build/icon.ico"
     },
     "linux": {
-      "target": ["AppImage", "tar.gz"],
+      "target": [
+        "AppImage",
+        "tar.gz"
+      ],
       "icon": "build/icon.png",
       "category": "Utility",
       "executableName": "church-scheduler",
