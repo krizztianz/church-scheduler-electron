@@ -17,15 +17,15 @@ function ensureDir(p) {
   try { fs.mkdirSync(p, { recursive: true }); } catch {}
 }
 
-// Save to Documents when packaged, else to local ./output (dev)
+// Save to Documents/JadwalPetugas/output when packaged, else to ./output (dev)
 function resolveOutputDir() {
   if (app.isPackaged) {
-    return path.join(app.getPath('documents'), 'ChurchScheduler', 'output');
+    return path.join(app.getPath('documents'), 'JadwalPetugas', 'output');
   }
   return resolveProjectPath('output');
 }
 
-// Format "Jadwal_Bulan_{Bulan}-{YYYY}_{HHmmss}.xlsx" (Indonesian month)
+// Format "Jadwal_Bulan_{Bulan}-{YYYY}_{HHmmss}.xlsx"
 function buildOutputName(year, month) {
   const d = new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1);
   const bulanNama = new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(d);
@@ -97,7 +97,7 @@ ipcMain.handle('open:output-folder', async (_evt, argOutputPath) => {
     const p = argOutputPath && typeof argOutputPath === 'string'
       ? argOutputPath
       : resolveOutputDir();
-    const folder = fs.statSync(p).isDirectory() ? p : path.dirname(p);
+    const folder = fs.existsSync(p) && fs.statSync(p).isDirectory() ? p : path.dirname(p);
     const res = await shell.openPath(folder);
     if (res) throw new Error(res); // shell.openPath returns empty string on success
     return true;
