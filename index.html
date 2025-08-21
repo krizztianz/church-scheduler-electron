@@ -38,14 +38,10 @@
 
     .pill{ border-radius:14px; padding:.35rem .65rem; font-size:.875rem; background:#f7f7f9; border:1px solid var(--line); }
 
-    /* Modal cosmetics */
     .modal-content{ border-radius:18px; }
     .modal-header{ border-bottom:0; }
     .modal-footer{ border-top:0; }
 
-    /* Month grid look (optional if we switch to selects later) -> we keep selects per requirement */
-
-    /* Responsive spacing tweaks */
     @media (max-width:575.98px){
       .app-frame{ padding:1.25rem; }
     }
@@ -68,6 +64,17 @@
           </div>
         </div>
 
+        <!-- Open Output Folder -->
+        <div class="col-10 col-sm-6 col-md-4 col-lg-3">
+          <div class="action-card text-center h-100" id="btnOpenFolder" role="button">
+            <div class="action-icon">
+              <i class="fa-solid fa-folder-open" aria-hidden="true"></i>
+            </div>
+            <div class="fw-bold">Open Folder Output</div>
+            <div class="action-label">Buka lokasi file jadwal</div>
+          </div>
+        </div>
+
         <!-- Pengaturan -->
         <div class="col-10 col-sm-6 col-md-4 col-lg-3">
           <div class="action-card text-center h-100" role="button">
@@ -80,7 +87,6 @@
         </div>
       </div>
 
-      <!-- Optional helper caption -->
       <div class="text-center mt-4">
         <span class="pill">Pilih aksi – cepat & responsif</span>
       </div>
@@ -100,7 +106,6 @@
             <div class="col-12 col-sm-7">
               <label for="selectBulan" class="form-label">Bulan</label>
               <select class="form-select" id="selectBulan" required>
-                <!-- 1..12 (diisi statis agar mudah disable/enable) -->
                 <option value="1">Januari</option>
                 <option value="2">Februari</option>
                 <option value="3">Maret</option>
@@ -146,30 +151,26 @@
   <!-- Scripts -->
   <script src="./assets/bootstrap.bundle.min.js"></script>
   <script>
-    async function onGenerateClicked() {
-      try {
-        const res = await window.api.generate(['--some-arg', 'value']);
-        console.log('OK:', res.stdout);
-        alert('Done!');
-      } catch (e) {
-        console.error(e);
-        alert('Failed: ' + e.message);
-      }
-    }
-  </script>
-  <script>
     (function(){
       const now = new Date();
       const THIS_YEAR = now.getFullYear();
       const THIS_MONTH = now.getMonth() + 1; // 1..12
 
       const elOpen = document.getElementById('btnGenerateOpen');
+      const elOpenFolder = document.getElementById('btnOpenFolder');
       const elModal = document.getElementById('modalGenerate');
       const modal = new bootstrap.Modal(elModal);
       const elSelectBulan = document.getElementById('selectBulan');
       const elSelectTahun = document.getElementById('selectTahun');
       const elHint = document.getElementById('hintBulan');
       const elSubmit = document.getElementById('btnGenerateSubmit');
+
+      function showToast(message){
+        const toastEl = document.getElementById('toastInfo');
+        document.getElementById('toastBody').textContent = message;
+        const t = new bootstrap.Toast(toastEl, { delay: 3000 });
+        t.show();
+      }
 
       // Populate Tahun (tahun ini & 1 tahun setelahnya)
       function fillYears(){
@@ -188,19 +189,16 @@
 
         opts.forEach(o => {
           const m = parseInt(o.value, 10);
-          // disable jika tahun terpilih = tahun ini dan bulan < bulan sekarang
           const shouldDisable = (selectedYear === THIS_YEAR && m < THIS_MONTH);
           o.disabled = shouldDisable;
           o.title = shouldDisable ? 'Tidak tersedia: bulan sudah berlalu di tahun ini' : '';
         });
 
-        // Pastikan ada bulan yang valid terpilih
         if (elSelectBulan.options[elSelectBulan.selectedIndex]?.disabled){
           const firstEnabled = opts.find(o => !o.disabled);
           if(firstEnabled) firstEnabled.selected = true;
         }
 
-        // Hint
         if (selectedYear === THIS_YEAR){
           elHint.textContent = 'Bulan sebelum bulan ini tidak dapat dipilih untuk tahun berjalan.';
         } else {
@@ -209,7 +207,6 @@
       }
 
       function setDefaultSelections(){
-        // default tahun = tahun ini, bulan = bulan ini
         elSelectTahun.value = String(THIS_YEAR);
         elSelectBulan.value = String(THIS_MONTH);
       }
@@ -222,6 +219,16 @@
         modal.show();
       });
 
+      // Open Folder action
+      elOpenFolder.addEventListener('click', async () => {
+        try{
+          await window.api.openOutputFolder();
+        }catch(e){
+          console.error(e);
+          showToast('Gagal membuka folder: ' + (e?.message || e));
+        }
+      });
+
       // Change handlers
       elSelectTahun.addEventListener('change', setMonthDisabledByYear);
 
@@ -232,13 +239,11 @@
         const bulanText = elSelectBulan.options[elSelectBulan.selectedIndex].textContent;
         const pjemaat = 3;
 
-        // Validasi kecil: jika disabled, cegah
         if (elSelectBulan.options[elSelectBulan.selectedIndex].disabled){
           showToast('Silakan pilih bulan yang tersedia.');
           return;
         }
 
-        // Normalisasi format argumen untuk runner: [MM, YYYY, PJEMAAT]
         const MM = String(bulanVal).padStart(2, '0');
         const YYYY = String(tahun);
         const args = [MM, YYYY, String(pjemaat)];
@@ -248,22 +253,15 @@
 
         try {
           const res = await window.api.generate(args);
-          // Tampilkan ringkas output (opsional)
           console.log('Runner OK:', res);
-          showToast('Selesai. File Excel tersimpan di folder output.');
+          showToast(`Selesai. Tersimpan di:\n${res.outputPath}`);
+          // Opsi: otomatis buka folder setelah sukses (komentari jika tidak ingin)
+          // await window.api.openOutputFolder(res.outputPath);
         } catch (e) {
           console.error(e);
           showToast('Gagal: ' + (e?.message || e));
         }
       });
-
-      // Toast helper
-      function showToast(message){
-        const toastEl = document.getElementById('toastInfo');
-        document.getElementById('toastBody').textContent = message;
-        const t = new bootstrap.Toast(toastEl, { delay: 2600 });
-        t.show();
-      }
     })();
   </script>
 </body>

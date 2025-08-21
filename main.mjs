@@ -1,5 +1,5 @@
 
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
@@ -17,7 +17,15 @@ function ensureDir(p) {
   try { fs.mkdirSync(p, { recursive: true }); } catch {}
 }
 
-// Format "Jadwal_Bulan_{Bulan}-{YYYY}_{HHmmss}.xlsx" in Indonesian locale
+// Save to Documents when packaged, else to local ./output (dev)
+function resolveOutputDir() {
+  if (app.isPackaged) {
+    return path.join(app.getPath('documents'), 'ChurchScheduler', 'output');
+  }
+  return resolveProjectPath('output');
+}
+
+// Format "Jadwal_Bulan_{Bulan}-{YYYY}_{HHmmss}.xlsx" (Indonesian month)
 function buildOutputName(year, month) {
   const d = new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1);
   const bulanNama = new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(d);
@@ -27,7 +35,7 @@ function buildOutputName(year, month) {
   return `Jadwal_Bulan_${bulanNama}-${year}_${hhmmss}.xlsx`;
 }
 
-// --- IPC: python:generate ---------------------------------------------------
+// --- IPC: trigger generation via OS-aware wrapper ---------------------------
 ipcMain.handle('python:generate', async (_evt, payload) => {
   try {
     const [MM, YYYY, pjemaatRaw] = payload?.args || [];
@@ -41,34 +49,30 @@ ipcMain.handle('python:generate', async (_evt, payload) => {
     const runSh = path.join(scriptDir, 'run.sh');
     const runBat = path.join(scriptDir, 'run.bat');
 
-    const outputDir = resolveProjectPath('output');
+    const outputDir = resolveOutputDir();
     ensureDir(outputDir);
     const fileName = buildOutputName(year, month);
     const outputPath = path.join(outputDir, fileName);
 
-    // Validate wrappers exist
+    // Validate wrapper presence
     if (process.platform === 'win32') {
       if (!fs.existsSync(runBat)) throw new Error(`Wrapper missing: ${runBat}`);
     } else {
       if (!fs.existsSync(runSh)) throw new Error(`Wrapper missing: ${runSh}`);
-    }
-
-    let child;
-    const env = { ...process.env, OUTPUT_PATH: outputPath };
-    if (process.platform === 'win32') {
-      child = spawn('cmd.exe', ['/c', runBat, month, year, pjemaat], {
-        cwd: scriptDir, env
-      });
-    } else {
-      // ensure exec bit; best-effort
       try {
         const st = fs.statSync(runSh);
         const mode = st.mode | 0o111;
         if ((st.mode & 0o111) === 0) fs.chmodSync(runSh, mode);
       } catch {}
-      child = spawn(runSh, [month, year, pjemaat], {
-        cwd: scriptDir, env
-      });
+    }
+
+    // Spawn
+    const env = { ...process.env, OUTPUT_PATH: outputPath };
+    let child;
+    if (process.platform === 'win32') {
+      child = spawn('cmd.exe', ['/c', runBat, month, year, pjemaat], { cwd: scriptDir, env });
+    } else {
+      child = spawn(runSh, [month, year, pjemaat], { cwd: scriptDir, env });
     }
 
     let stdout = '', stderr = '';
@@ -78,11 +82,8 @@ ipcMain.handle('python:generate', async (_evt, payload) => {
     return await new Promise((resolve, reject) => {
       child.on('error', (err) => reject(new Error(`Spawn failed: ${err.message}`)));
       child.on('close', (code) => {
-        if (code === 0) {
-          resolve({ code, stdout, stderr, outputPath });
-        } else {
-          reject(new Error(stderr || `Wrapper exited with code ${code}`));
-        }
+        if (code === 0) resolve({ code, stdout, stderr, outputPath });
+        else reject(new Error(stderr || `Wrapper exited with code ${code}`));
       });
     });
   } catch (err) {
@@ -90,7 +91,22 @@ ipcMain.handle('python:generate', async (_evt, payload) => {
   }
 });
 
-// --- Window ---------------------------------------------------
+// --- IPC: open output folder ------------------------------------------------
+ipcMain.handle('open:output-folder', async (_evt, argOutputPath) => {
+  try {
+    const p = argOutputPath && typeof argOutputPath === 'string'
+      ? argOutputPath
+      : resolveOutputDir();
+    const folder = fs.statSync(p).isDirectory() ? p : path.dirname(p);
+    const res = await shell.openPath(folder);
+    if (res) throw new Error(res); // shell.openPath returns empty string on success
+    return true;
+  } catch (err) {
+    throw new Error(err?.message || String(err));
+  }
+});
+
+// --- Window -----------------------------------------------------------------
 function createWindow() {
   const win = new BrowserWindow({
     width: 1024,
