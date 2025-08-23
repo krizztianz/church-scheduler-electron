@@ -78,3 +78,10 @@ temp/
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+
+#Other files
+engine-go.*
+engine-go
+*.xlsx
+!Master.xlsx
+!TemplateOutput.xlsx

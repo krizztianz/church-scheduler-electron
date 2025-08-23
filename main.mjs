@@ -1,169 +1,254 @@
+// main.mjs — absolute-path fix for preload & index.html (v6)
+// - Uses __dirname derived from import.meta.url
+// - Ensures absolute paths for preload + loadFile
+// - Retains Go-engine + Settings IPC previously implemented
 
 import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
-import { spawn } from 'child_process';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-function resolveProjectPath(...segments) {
-  const base = app.isPackaged ? process.resourcesPath : __dirname;
-  return path.join(base, ...segments);
-}
-
-function ensureDir(p) {
-  try { fs.mkdirSync(p, { recursive: true }); } catch {}
-}
-
-// Save to Documents/JadwalPetugas/output when packaged, else to ./output (dev)
-function resolveOutputDir() {
-  if (app.isPackaged) {
-    return path.join(app.getPath('documents'), 'JadwalPetugas', 'output');
-  }
-  return resolveProjectPath('output');
-}
-
-// Ensure Master.xlsx exists under Documents/JadwalPetugas/config.
-// 1) If found there, return it.
-// 2) Else try to copy from resources candidates.
-// 3) Else prompt user to select a .xlsx and copy it there.
-async function ensureMasterInDocuments() {
-  const cfgDir = path.join(app.getPath('documents'), 'JadwalPetugas', 'config');
-  const target = path.join(cfgDir, 'Master.xlsx');
-  if (fs.existsSync(target)) return target;
-
-  const candidates = [
-    resolveProjectPath('Master.xlsx'),
-    resolveProjectPath('pythonScripts', 'Master.xlsx')
-  ];
-
-  for (const c of candidates) {
-    if (fs.existsSync(c)) {
-      ensureDir(cfgDir);
-      fs.copyFileSync(c, target);
-      return target;
-    }
-  }
-
-  // Ask user to pick Master.xlsx once
-  const res = await dialog.showOpenDialog({
-    title: 'Pilih file Master.xlsx',
-    message: 'File Master.xlsx tidak ditemukan. Pilih file Master.xlsx sumber data Anda. File akan disalin ke Documents/JadwalPetugas/config.',
-    properties: ['openFile'],
-    filters: [{ name: 'Excel', extensions: ['xlsx'] }]
-  });
-  if (res.canceled || !res.filePaths?.length) {
-    throw new Error('Master.xlsx belum tersedia. Silakan pilih file Master.xlsx.');
-  }
-  const picked = res.filePaths[0];
-  if (!fs.existsSync(picked)) throw new Error('File yang dipilih tidak ditemukan.');
-  ensureDir(cfgDir);
-  fs.copyFileSync(picked, target);
-  return target;
-}
-
-// Format "Jadwal_Bulan_{Bulan}-{YYYY}_{HHmmss}.xlsx"
-function buildOutputName(year, month) {
-  const d = new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1);
-  const bulanNama = new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(d);
-  const hhmmss = new Intl.DateTimeFormat('id-ID', {
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-  }).format(new Date()).replace(/:/g, '');
-  return `Jadwal_Bulan_${bulanNama}-${year}_${hhmmss}.xlsx`;
-}
-
-// --- IPC: trigger generation via OS-aware wrapper ---------------------------
-ipcMain.handle('python:generate', async (_evt, payload) => {
-  try {
-    const [MM, YYYY, pjemaatRaw] = payload?.args || [];
-    if (!MM || !YYYY) throw new Error("Args missing. Expect [MM, YYYY, pjemaat].");
-
-    // Pre-initialize Master.xlsx in Documents (one-time, interactive if needed)
-    await ensureMasterInDocuments();
-
-    const month = String(parseInt(MM, 10));
-    const year  = String(parseInt(YYYY, 10));
-    const pjemaat = String(parseInt(pjemaatRaw ?? "3", 10) || 3);
-
-    const scriptDir = resolveProjectPath('pythonScripts');
-    const runSh = path.join(scriptDir, 'run.sh');
-    const runBat = path.join(scriptDir, 'run.bat');
-
-    const outputDir = resolveOutputDir();
-    ensureDir(outputDir);
-    const fileName = buildOutputName(year, month);
-    const outputPath = path.join(outputDir, fileName);
-
-    // Validate wrapper presence
-    if (process.platform === 'win32') {
-      if (!fs.existsSync(runBat)) throw new Error(`Wrapper missing: ${runBat}`);
-    } else {
-      if (!fs.existsSync(runSh)) throw new Error(`Wrapper missing: ${runSh}`);
-      try {
-        const st = fs.statSync(runSh);
-        const mode = st.mode | 0o111;
-        if ((st.mode & 0o111) === 0) fs.chmodSync(runSh, mode);
-      } catch {}
-    }
-
-    // Spawn
-    const env = { ...process.env, OUTPUT_PATH: outputPath };
-    let child;
-    if (process.platform === 'win32') {
-      child = spawn('cmd.exe', ['/c', runBat, month, year, pjemaat], { cwd: scriptDir, env });
-    } else {
-      child = spawn(runSh, [month, year, pjemaat], { cwd: scriptDir, env });
-    }
-
-    let stdout = '', stderr = '';
-    child.stdout.on('data', (d) => stdout += d.toString());
-    child.stderr.on('data', (d) => stderr += d.toString());
-
-    return await new Promise((resolve, reject) => {
-      child.on('error', (err) => reject(new Error(`Spawn failed: ${err.message}`)));
-      child.on('close', (code) => {
-        if (code === 0) resolve({ code, stdout, stderr, outputPath });
-        else reject(new Error(stderr || `Wrapper exited with code ${code}`));
-      });
-    });
-  } catch (err) {
-    throw new Error(err?.message || String(err));
-  }
-});
-
-// --- IPC: open output folder ------------------------------------------------
-ipcMain.handle('open:output-folder', async (_evt, argOutputPath) => {
-  try {
-    const p = argOutputPath && typeof argOutputPath === 'string'
-      ? argOutputPath
-      : resolveOutputDir();
-    const folder = fs.existsSync(p) && fs.statSync(p).isDirectory() ? p : path.dirname(p);
-    const res = await shell.openPath(folder);
-    if (res) throw new Error(res); // shell.openPath returns empty string on success
-    return true;
-  } catch (err) {
-    throw new Error(err?.message || String(err));
-  }
-});
-
-// --- Window -----------------------------------------------------------------
-function createWindow() {
+function createWindow () {
   const win = new BrowserWindow({
     width: 1024,
     height: 560,
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
-      nodeIntegration: false
+      // ABSOLUTE PATH for preload (Windows-safe)
+      preload: path.resolve(__dirname, 'preload.cjs'),
+      nodeIntegration: false,
+      sandbox: true,
     },
-    icon: resolveProjectPath('build', 'icon.png')
+    show: false
   });
-  win.loadFile(resolveProjectPath('index.html'));
+  win.once('ready-to-show', () => win.show());
+
+  // ABSOLUTE PATH for index.html (Windows-safe)
+  win.loadFile(path.resolve(__dirname, 'index.html'));
 }
 
-app.whenReady().then(createWindow);
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+app.whenReady().then(() => {
+  createWindow();
+  app.on('activate', function () {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
+app.on('window-all-closed', function () {
+  if (process.platform !== 'darwin') app.quit();
+});
+
+// -------------------- Config helpers --------------------
+function configDir() {
+  return path.join(os.homedir(), 'Documents', 'JadwalPetugas', 'config');
+}
+function configPath() {
+  return path.join(configDir(), 'config.json');
+}
+const defaultConfig = {
+  general: {
+    verbose: false,
+    outdir: "",               // empty => engine default ~/Documents/JadwalPetugas
+    templateName: "TemplateOutput.xlsx",
+    masterOverride: ""
+  }
+};
+function ensureConfigDir() {
+  const dir = configDir();
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+function readConfig() {
+  try {
+    const p = configPath();
+    if (!fs.existsSync(p)) return structuredClone(defaultConfig);
+    const raw = fs.readFileSync(p, 'utf-8');
+    const parsed = JSON.parse(raw);
+    // Shallow merge with defaults to tolerate older/newer versions
+    return {
+      general: {
+        ...defaultConfig.general,
+        ...(parsed?.general ?? {}),
+      }
+    };
+  } catch {
+    return structuredClone(defaultConfig);
+  }
+}
+function writeConfig(cfg) {
+  ensureConfigDir();
+  const merged = {
+    general: {
+      ...defaultConfig.general,
+      ...(cfg?.general ?? {}),
+    }
+  };
+  fs.writeFileSync(configPath(), JSON.stringify(merged, null, 2), 'utf-8');
+  return merged;
+}
+
+// -------------------- Engine path resolution --------------------
+function resolveEnginePath() {
+  const binName = process.platform === 'win32' ? 'engine-go.exe' : 'engine-go';
+  const envPath = process.env.ENGINE_GO_PATH && process.env.ENGINE_GO_PATH.trim();
+
+  const candidates = [
+    envPath,
+    // dev-first: near this main.mjs
+    path.join(__dirname, 'deploy', 'go', binName),
+    // packaged resources
+    path.join(process.resourcesPath ?? '', 'deploy', 'go', binName),
+    // app path
+    path.join(app.getAppPath(), 'deploy', 'go', binName),
+    // cwd (last resort)
+    path.join(process.cwd(), 'deploy', 'go', binName),
+  ].filter(Boolean);
+
+  for (const p of candidates) {
+    try {
+      if (p && fs.existsSync(p)) {
+        const dir = path.dirname(p);
+        return { bin: p, cwd: dir };
+      }
+    } catch {}
+  }
+  throw new Error(`Engine Go binary not found. Expected at one of:
+- ${candidates.filter(Boolean).join('\n- ')}
+Tip: put your binary at deploy/go/${binName} or set ENGINE_GO_PATH.`);
+}
+
+// -------------------- Engine runner --------------------
+function runGoEngine(flags) {
+  return new Promise((resolve, reject) => {
+    let out = '', err = '';
+    let outputPath = '';
+
+    let eng;
+    try {
+      const { bin, cwd } = resolveEnginePath();
+
+      // Best-effort: on POSIX ensure executable bit (dev only)
+      if (process.platform !== 'win32') {
+        try {
+          const st = fs.statSync(bin);
+          const mode = st.mode | 0o111;
+          if ((st.mode & 0o111) === 0) fs.chmodSync(bin, mode);
+        } catch {}
+      }
+
+      eng = spawn(bin, flags, { cwd, env: process.env });
+
+      eng.stdout.on('data', (d) => {
+        const s = d.toString();
+        out += s;
+        const m = s.match(/SUKSES:\s*(.+)$/m);
+        if (m) outputPath = m[1].trim();
+      });
+      eng.stderr.on('data', (d) => { err += d.toString(); });
+      eng.on('error', (e) => reject(e));
+      eng.on('close', (code) => {
+        if (code === 0) resolve({ stdout: out, stderr: err, outputPath });
+        else reject(new Error(err || out || `Engine exited with code ${code}`));
+      });
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+// -------------------- IPC: Settings --------------------
+ipcMain.handle('settings:load', async () => {
+  return readConfig();
+});
+ipcMain.handle('settings:save', async (_evt, cfg) => {
+  try {
+    const saved = writeConfig(cfg);
+    return { ok: true, cfg: saved };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+});
+
+// -------------------- IPC: File/Folder pickers --------------------
+ipcMain.handle('dialog:pick-folder', async () => {
+  const res = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
+  if (res.canceled || !res.filePaths?.length) return { canceled: true };
+  return { canceled: false, path: res.filePaths[0] };
+});
+ipcMain.handle('dialog:pick-file', async (_evt, opts) => {
+  const filters = opts?.filters ?? [{ name: 'All Files', extensions: ['*'] }];
+  const res = await dialog.showOpenDialog({ properties: ['openFile'], filters });
+  if (res.canceled || !res.filePaths?.length) return { canceled: true };
+  return { canceled: false, path: res.filePaths[0] };
+});
+
+// -------------------- IPC: Generate via Go engine --------------------
+ipcMain.handle('go:generate', async (_evt, payload) => {
+  // Accept either legacy payload.args = [MM, YYYY] or payload.form = {month, year, generateOneMonth, day}
+  let MM, YYYY, generateOneMonth = true, day = null;
+
+  if (payload?.form) {
+    const f = payload.form;
+    MM = parseInt(f.month, 10);
+    YYYY = parseInt(f.year, 10);
+    generateOneMonth = !!f.generateOneMonth;
+    day = f.day ? parseInt(f.day, 10) : null;
+  } else {
+    const A = Array.isArray(payload?.args) ? payload.args : [];
+    MM = parseInt(A[0] ?? '', 10);
+    YYYY = parseInt(A[1] ?? '', 10);
+    generateOneMonth = true;
+  }
+
+  if (!MM || !YYYY) {
+    throw new Error('Argumen tidak valid. Bulan & Tahun wajib.');
+  }
+
+  const cfg = readConfig();
+  const flags = ['-bulan', String(MM), '-tahun', String(YYYY)];
+
+  // Settings mapping (1–4)
+  if (cfg?.general?.verbose) flags.push('-v');
+  if (cfg?.general?.outdir)  flags.push('-outdir', String(cfg.general.outdir));
+  if (cfg?.general?.templateName) flags.push('-template', String(cfg.general.templateName));
+  if (cfg?.general?.masterOverride) flags.push('-master', String(cfg.general.masterOverride));
+
+  // Single date?
+  if (!generateOneMonth && day && day >= 1 && day <= 31) {
+    flags.push('-tgl', String(day));
+  }
+
+  const result = await runGoEngine(flags);
+  return {
+    ok: true,
+    outputPath: result.outputPath || null,
+    stdout: result.stdout,
+    stderr: result.stderr
+  };
+});
+
+// -------------------- IPC: open output folder --------------------
+ipcMain.handle('open:output-folder', async (_evt, givenPath) => {
+  let target = givenPath && String(givenPath);
+  if (!target) {
+    target = path.join(os.homedir(), 'Documents', 'JadwalPetugas');
+  }
+  try {
+    if (fs.existsSync(target)) {
+      const stat = fs.statSync(target);
+      if (stat.isDirectory()) {
+        await shell.openPath(target);
+      } else {
+        shell.showItemInFolder(target);
+      }
+      return { ok: true, opened: target };
+    }
+  } catch {}
+  throw new Error(`Folder/File tidak ditemukan: ${target}`);
+});

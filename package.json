@@ -19,7 +19,7 @@
   "type": "module",
   "main": "main.mjs",
   "scripts": {
-    "start": "electron .",
+    "start": "electron . --trace-warnings",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux"
   },
@@ -28,23 +28,33 @@
     "productName": "ChurchScheduler",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "files": [
-      "**/*",
-      "!pythonScripts/venv{,/**}",
-      "!.venv{,/**}",
-      "!**/.venv{,/**}",
-      "!**/__pycache__/**",
-      "!**/*.pyc"
+      "**/*"
     ],
     "extraResources": [
-      { "from": "pythonScripts",      "to": "pythonScripts", "filter": ["**/*", "!venv/**", "!**/__pycache__/**", "!**/*.pyc"] },
-      { "from": "church_scheduler.py","to": "church_scheduler.py" },
-      { "from": "Master.xlsx",        "to": "Master.xlsx" },
-      { "from": "requirements.txt",   "to": "requirements.txt" },
-      { "from": "index.html",         "to": "index.html" },
-      { "from": "assets",             "to": "assets" }
-    ],
-    "asarUnpack": [
-      "pythonScripts/**"
+      {
+        "from": "church_scheduler.py",
+        "to": "church_scheduler.py"
+      },
+      {
+        "from": "Master.xlsx",
+        "to": "Master.xlsx"
+      },
+      {
+        "from": "index.html",
+        "to": "index.html"
+      },
+      {
+        "from": "assets",
+        "to": "assets"
+      },
+      {
+        "from": "deploy/go",
+        "to": "deploy/go"
+      },
+      {
+        "from": "TemplateOutput.xlsx",
+        "to": "TemplateOutput.xlsx"
+      }
     ],
     "directories": {
       "buildResources": "build"
@@ -81,5 +91,7 @@
   "devDependencies": {
     "electron": "^37.3.1",
     "electron-builder": "^26.0.12"
-  }
+  },
+  "dependencies": {},
+  "optionalDependencies": {}
 }
