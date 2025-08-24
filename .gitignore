@@ -83,5 +83,3 @@ pnpm-lock.yaml
 engine-go.*
 engine-go
 *.xlsx
-!Master.xlsx
-!TemplateOutput.xlsx
