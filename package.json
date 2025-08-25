@@ -19,7 +19,7 @@
   "type": "module",
   "main": "main.mjs",
   "scripts": {
-    "start": "electron . --trace-warnings",
+    "start": "electron .",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux"
   },
@@ -28,16 +28,17 @@
     "productName": "ChurchScheduler",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "files": [
-      "**/*"
+      "**/*",
+      "!deploy/go{,/**}"
     ],
     "extraResources": [
       {
-        "from": "church_scheduler.py",
-        "to": "church_scheduler.py"
-      },
-      {
         "from": "Master.xlsx",
         "to": "Master.xlsx"
+      },
+      {
+        "from": "requirements.txt",
+        "to": "requirements.txt"
       },
       {
         "from": "index.html",
@@ -50,11 +51,10 @@
       {
         "from": "deploy/go",
         "to": "deploy/go"
-      },
-      {
-        "from": "TemplateOutput.xlsx",
-        "to": "TemplateOutput.xlsx"
       }
+    ],
+    "asarUnpack": [
+      
     ],
     "directories": {
       "buildResources": "build"
@@ -91,7 +91,5 @@
   "devDependencies": {
     "electron": "^37.3.1",
     "electron-builder": "^26.0.12"
-  },
-  "dependencies": {},
-  "optionalDependencies": {}
+  }
 }

@@ -263,34 +263,6 @@
         }
       });
     })();
-  
-      // Fallback handler for Generate button (v8)
-      (function(){
-        const btnGenerate = document.getElementById('btnGenerateSubmit');
-        if (!btnGenerate) return;
-        btnGenerate.addEventListener('click', async () => {
-          const month = parseInt(elSelectBulan.value, 10);
-          const year  = parseInt(elSelectTahun.value, 10);
-          if (!month || !year){
-            window.showToast('Bulan & Tahun wajib diisi');
-            return;
-          }
-          const generateOneMonth = elChkOneMonth.checked;
-          const day = generateOneMonth ? null : parseInt(elSelectTanggal.value, 10);
-          const bulanText = elSelectBulan.options[elSelectBulan.selectedIndex].textContent.trim();
-          const label = generateOneMonth ? `${bulanText} ${year}` : `${day} ${bulanText} ${year}`;
-
-          try { bootstrap.Modal.getOrCreateInstance(document.getElementById('modalGenerate'))?.hide(); } catch {}
-          window.showToast(`Memproses Jadwal ${label}`);
-
-          try {
-            const res = await window.api.generate({ month, year, generateOneMonth, day });
-            const ok = !!res?.ok;
-            window.showToast(ok ? (`Selesai. Tersimpan di:\n${res.outputPath || '-'}`) : ('Gagal: ' + (res?.stderr || 'unknown')));
-          } catch(e){ window.showToast('Gagal: ' + (e?.message || e)); }
-        }, { once: false });
-      })();
-    
-</script>
+  </script>
 </body>
 </html>
